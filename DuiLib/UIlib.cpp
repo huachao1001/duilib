@@ -28,7 +28,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 //
-// DirectUI - UI Library
+// DirectUI - ui Library
 //
 // Written by Bjarke Viksoe (bjarke@viksoe.dk)
 // Copyright (c) 2006-2007 Bjarke Viksoe.
@@ -46,7 +46,6 @@
 //
 //
 
-
 #include "stdafx.h"
 #include "UIlib.h"
 
@@ -63,3 +62,4 @@ BOOL APIENTRY DllMain(HANDLE hModule, DWORD  dwReason, LPVOID /*lpReserved*/)
     }
     return TRUE;
 }
+

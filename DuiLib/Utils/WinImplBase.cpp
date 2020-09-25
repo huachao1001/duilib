@@ -1,36 +1,32 @@
 #include "stdafx.h"
 
-namespace DuiLib
+namespace ui
 {
 
-//////////////////////////////////////////////////////////////////////////
+WindowImplBase::WindowImplBase()
+{
 
-LPBYTE WindowImplBase::m_lpResourceZIPBuffer=NULL;
+}
 
-DUI_BEGIN_MESSAGE_MAP(WindowImplBase,CNotifyPump)
-	DUI_ON_MSGTYPE(DUI_MSGTYPE_CLICK,OnClick)
-DUI_END_MESSAGE_MAP()
+
+WindowImplBase::~WindowImplBase()
+{
+
+}
 
 void WindowImplBase::OnFinalMessage( HWND hWnd )
 {
-	m_PaintManager.RemovePreMessageFilter(this);
-	m_PaintManager.RemoveNotifier(this);
-	m_PaintManager.ReapObjects(m_PaintManager.GetRoot());
+	__super::OnFinalMessage(hWnd);
+	ReapObjects(GetRoot());
+	delete this;
 }
 
-LRESULT WindowImplBase::ResponseDefaultKeyEvent(WPARAM wParam)
+LONG WindowImplBase::GetStyle()
 {
-	if (wParam == VK_RETURN)
-	{
-		return FALSE;
-	}
-	else if (wParam == VK_ESCAPE)
-	{
-		Close();
-		return TRUE;
-	}
+	LONG styleValue = ::GetWindowLong(GetHWND(), GWL_STYLE);
+	styleValue &= ~WS_CAPTION;
 
-	return FALSE;
+	return styleValue;
 }
 
 UINT WindowImplBase::GetClassStyle() const
@@ -38,133 +34,140 @@ UINT WindowImplBase::GetClassStyle() const
 	return CS_DBLCLKS;
 }
 
-UILIB_RESOURCETYPE WindowImplBase::GetResourceType() const
-{
-	return UILIB_FILE;
-}
-
-CDuiString WindowImplBase::GetZIPFileName() const
+std::wstring WindowImplBase::GetResourceID() const
 {
 	return _T("");
 }
 
-LPCTSTR WindowImplBase::GetResourceID() const
-{
-	return _T("");
-}
-
-CControlUI* WindowImplBase::CreateControl(LPCTSTR pstrClass)
+Control* WindowImplBase::CreateControl(const std::wstring& pstrClass)
 {
 	return NULL;
 }
 
-LRESULT WindowImplBase::MessageHandler(UINT uMsg, WPARAM wParam, LPARAM /*lParam*/, bool& /*bHandled*/)
+LRESULT WindowImplBase::MessageHandler(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-	if (uMsg == WM_KEYDOWN)
-	{
-		switch (wParam)
-		{
-		case VK_RETURN:
-		case VK_ESCAPE:
-			return ResponseDefaultKeyEvent(wParam);
-		default:
-			break;
-		}
-	}
 	return FALSE;
 }
 
-LRESULT WindowImplBase::OnClose(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnClose(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnDestroy(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-#if defined(WIN32) && !defined(UNDER_CE)
-LRESULT WindowImplBase::OnNcActivate(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnNcActivate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-	if( ::IsIconic(*this) ) bHandled = FALSE;
+	if( ::IsIconic(GetHWND()) ) bHandled = FALSE;
 	return (wParam == 0) ? TRUE : FALSE;
 }
 
 LRESULT WindowImplBase::OnNcCalcSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-	LPRECT pRect=NULL;
-
-	if ( wParam == TRUE)
-	{
-		LPNCCALCSIZE_PARAMS pParam = (LPNCCALCSIZE_PARAMS)lParam;
-		pRect=&pParam->rgrc[0];
-	}
-	else
-	{
-		pRect=(LPRECT)lParam;
-	}
-
-	if ( ::IsZoomed(m_hWnd))
-	{	// 最大化时，计算当前显示器最适合宽高度
-		MONITORINFO oMonitor = {};
-		oMonitor.cbSize = sizeof(oMonitor);
-		::GetMonitorInfo(::MonitorFromWindow(*this, MONITOR_DEFAULTTONEAREST), &oMonitor);
-		CDuiRect rcWork = oMonitor.rcWork;
-		CDuiRect rcMonitor = oMonitor.rcMonitor;
-		rcWork.Offset(-oMonitor.rcMonitor.left, -oMonitor.rcMonitor.top);
-
-		pRect->right = pRect->left + rcWork.GetWidth();
-		pRect->bottom = pRect->top + rcWork.GetHeight();
-		return WVR_REDRAW;
-	}
-
 	return 0;
 }
 
-LRESULT WindowImplBase::OnNcPaint(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+LRESULT WindowImplBase::OnWindowPosChanging(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
+	bHandled = FALSE;
+	if (IsZoomed(m_hWnd))
+	{
+		LPWINDOWPOS lpPos = (LPWINDOWPOS)lParam;
+		if (lpPos->flags & SWP_FRAMECHANGED) // 第一次最大化，而不是最大化之后所触发的WINDOWPOSCHANGE
+		{
+			POINT pt = { 0, 0 };
+			HMONITOR hMontorPrimary = MonitorFromPoint(pt, MONITOR_DEFAULTTOPRIMARY);
+			HMONITOR hMonitorTo = MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
+
+			if (hMonitorTo != hMontorPrimary)
+			{
+				// 解决无边框窗口在双屏下面（副屏分辨率大于主屏）时，最大化不正确的问题
+				MONITORINFO  miTo = { sizeof(miTo), 0 };
+				GetMonitorInfo(hMonitorTo, &miTo);
+
+				lpPos->x = miTo.rcWork.left;
+				lpPos->y = miTo.rcWork.top;
+				lpPos->cx = miTo.rcWork.right - miTo.rcWork.left;
+				lpPos->cy = miTo.rcWork.bottom - miTo.rcWork.top;
+			}
+		}
+	}
+	return 0;
+}
+
+LRESULT WindowImplBase::OnNcPaint(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	return 0;
+}
+
+LRESULT WindowImplBase::OnNcLButtonDbClick(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	/*if (!::IsZoomed(GetHWND()))
+	{
+		SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+	}
+	else
+	{
+		SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0);
+	}*/
+
 	return 0;
 }
 
 LRESULT WindowImplBase::OnNcHitTest(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	POINT pt; pt.x = GET_X_LPARAM(lParam); pt.y = GET_Y_LPARAM(lParam);
-	::ScreenToClient(*this, &pt);
+	::ScreenToClient(GetHWND(), &pt);
 
-	RECT rcClient;
-	::GetClientRect(*this, &rcClient);
+	UiRect rcClient;
+	::GetClientRect(GetHWND(), &rcClient);
 	
-	if( !::IsZoomed(*this) )
-	{
-		RECT rcSizeBox = m_PaintManager.GetSizeBox();
-		if( pt.y < rcClient.top + rcSizeBox.top )
-		{
-			if( pt.x < rcClient.left + rcSizeBox.left ) return HTTOPLEFT;
-			if( pt.x > rcClient.right - rcSizeBox.right ) return HTTOPRIGHT;
-			return HTTOP;
+	rcClient.Deflate(m_shadow.GetShadowCorner());
+	
+	if( !::IsZoomed(GetHWND()) ) {
+		UiRect rcSizeBox = GetSizeBox();
+		if( pt.y < rcClient.top + rcSizeBox.top ) {
+			if (pt.y >= rcClient.top) {
+				if (pt.x < (rcClient.left + rcSizeBox.left) && pt.x >= rcClient.left) return HTTOPLEFT;
+				else if (pt.x >(rcClient.right - rcSizeBox.right) && pt.x <= rcClient.right) return HTTOPRIGHT;
+				else return HTTOP;
+			}
+			else return HTCLIENT;
 		}
-		else if( pt.y > rcClient.bottom - rcSizeBox.bottom )
-		{
-			if( pt.x < rcClient.left + rcSizeBox.left ) return HTBOTTOMLEFT;
-			if( pt.x > rcClient.right - rcSizeBox.right ) return HTBOTTOMRIGHT;
-			return HTBOTTOM;
+		else if( pt.y > rcClient.bottom - rcSizeBox.bottom ) {
+			if (pt.y <= rcClient.bottom) {
+				if (pt.x < (rcClient.left + rcSizeBox.left) && pt.x >= rcClient.left) return HTBOTTOMLEFT;
+				else if (pt.x > (rcClient.right - rcSizeBox.right) && pt.x <= rcClient.right) return HTBOTTOMRIGHT;
+				else return HTBOTTOM;
+			}
+			else return HTCLIENT;
 		}
 
-		if( pt.x < rcClient.left + rcSizeBox.left ) return HTLEFT;
-		if( pt.x > rcClient.right - rcSizeBox.right ) return HTRIGHT;
+		if (pt.x < rcClient.left + rcSizeBox.left) {
+			if (pt.x >= rcClient.left) return HTLEFT;
+			else return HTCLIENT;
+		}
+		if (pt.x > rcClient.right - rcSizeBox.right) {
+			if (pt.x <= rcClient.right) return HTRIGHT;
+			else return HTCLIENT;
+		}
 	}
 
-	RECT rcCaption = m_PaintManager.GetCaptionRect();
+	UiRect rcCaption = GetCaptionRect();
 	if( pt.x >= rcClient.left + rcCaption.left && pt.x < rcClient.right - rcCaption.right \
-		&& pt.y >= rcCaption.top && pt.y < rcCaption.bottom ) {
-			CControlUI* pControl = static_cast<CControlUI*>(m_PaintManager.FindControl(pt));
-			if( pControl && _tcsicmp(pControl->GetClass(), DUI_CTR_BUTTON) != 0 && 
-				_tcsicmp(pControl->GetClass(), DUI_CTR_OPTION) != 0 &&
-				_tcsicmp(pControl->GetClass(), DUI_CTR_TEXT) != 0 )
-				return HTCAPTION;
+		&& pt.y >= rcClient.top + rcCaption.top && pt.y < rcClient.top + rcCaption.bottom ) {
+			Control* pControl = FindControl(pt);
+			if( pControl ) {
+				if (dynamic_cast<Button*>(pControl) || dynamic_cast<ButtonBox*>(pControl) || dynamic_cast<RichEdit*>(pControl))
+					return HTCLIENT;
+				else
+					return HTCAPTION;
+			}	
 	}
 
 	return HTCLIENT;
@@ -173,29 +176,46 @@ LRESULT WindowImplBase::OnNcHitTest(UINT uMsg, WPARAM wParam, LPARAM lParam, BOO
 LRESULT WindowImplBase::OnGetMinMaxInfo(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	LPMINMAXINFO lpMMI = (LPMINMAXINFO) lParam;
-
 	MONITORINFO oMonitor = {};
 	oMonitor.cbSize = sizeof(oMonitor);
-	::GetMonitorInfo(::MonitorFromWindow(*this, MONITOR_DEFAULTTONEAREST), &oMonitor);
-	CDuiRect rcWork = oMonitor.rcWork;
-	CDuiRect rcMonitor = oMonitor.rcMonitor;
+	::GetMonitorInfo(::MonitorFromWindow(GetHWND(), MONITOR_DEFAULTTONEAREST), &oMonitor);
+	UiRect rcWork = oMonitor.rcWork;
+	UiRect rcMonitor = oMonitor.rcMonitor;
 	rcWork.Offset(-oMonitor.rcMonitor.left, -oMonitor.rcMonitor.top);
 
-	// 计算最大化时，正确的原点坐标
-	lpMMI->ptMaxPosition.x	= rcWork.left;
-	lpMMI->ptMaxPosition.y	= rcWork.top;
+	UiRect rcMaximize = GetMaximizeInfo();
+	if (rcMaximize.GetWidth() > 0 && rcMaximize.GetHeight() > 0) {
+		lpMMI->ptMaxPosition.x	= rcWork.left + rcMaximize.left;
+		lpMMI->ptMaxPosition.y	= rcWork.top + rcMaximize.top;
+		lpMMI->ptMaxSize.x = rcMaximize.GetWidth();
+		lpMMI->ptMaxSize.y = rcMaximize.GetHeight();
+	} 
+	else {
+		// 计算最大化时，正确的原点坐标
+		lpMMI->ptMaxPosition.x	= rcWork.left;
+		lpMMI->ptMaxPosition.y	= rcWork.top;
+		lpMMI->ptMaxSize.x = rcWork.GetWidth();
+		lpMMI->ptMaxSize.y = rcWork.GetHeight();
+	}
 
-	lpMMI->ptMaxTrackSize.x =rcWork.GetWidth();
-	lpMMI->ptMaxTrackSize.y =rcWork.GetHeight();
-
-	lpMMI->ptMinTrackSize.x =m_PaintManager.GetMinInfo().cx;
-	lpMMI->ptMinTrackSize.y =m_PaintManager.GetMinInfo().cy;
+	if (GetMaxInfo().cx != 0) {
+		lpMMI->ptMaxTrackSize.x = GetMaxInfo(true).cx;
+	}
+	if (GetMaxInfo().cy != 0) {
+		lpMMI->ptMaxTrackSize.y = GetMaxInfo(true).cy;
+	}
+	if (GetMinInfo().cx != 0) {
+		lpMMI->ptMinTrackSize.x = GetMinInfo(true).cx;
+	}
+	if (GetMinInfo().cy != 0) {
+		lpMMI->ptMinTrackSize.y = GetMinInfo(true).cy;
+	}
 
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnMouseWheel(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnMouseWheel(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
@@ -206,22 +226,35 @@ LRESULT WindowImplBase::OnMouseHover(UINT uMsg, WPARAM wParam, LPARAM lParam, BO
 	bHandled = FALSE;
 	return 0;
 }
-#endif
+
+LRESULT WindowImplBase::OnDpiChanged(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+{
+	bHandled = FALSE;
+
+	// 重置全局 DPI 设定
+	DpiManager::GetInstance()->SetScale(LOWORD(wParam));
+
+	// 重置阴影范围
+	m_shadow.ResetShadowBox();
+
+	// TODO 对窗口大小进行进行改变，让所有控件重新根据 DPI 计算大小
+
+	return 0;
+}
 
 LRESULT WindowImplBase::OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-	SIZE szRoundCorner = m_PaintManager.GetRoundCorner();
-#if defined(WIN32) && !defined(UNDER_CE)
-	if( !::IsIconic(*this) && (szRoundCorner.cx != 0 || szRoundCorner.cy != 0) ) {
-		CDuiRect rcWnd;
-		::GetWindowRect(*this, &rcWnd);
+	CSize szRoundCorner = GetRoundCorner();
+	if( !::IsIconic(GetHWND()) && (szRoundCorner.cx != 0 || szRoundCorner.cy != 0) ) {
+		UiRect rcWnd;
+		::GetWindowRect(GetHWND(), &rcWnd);
 		rcWnd.Offset(-rcWnd.left, -rcWnd.top);
 		rcWnd.right++; rcWnd.bottom++;
 		HRGN hRgn = ::CreateRoundRectRgn(rcWnd.left, rcWnd.top, rcWnd.right, rcWnd.bottom, szRoundCorner.cx, szRoundCorner.cy);
-		::SetWindowRgn(*this, hRgn, TRUE);
+		::SetWindowRgn(GetHWND(), hRgn, TRUE);
 		::DeleteObject(hRgn);
 	}
-#endif
+
 	bHandled = FALSE;
 	return 0;
 }
@@ -234,143 +267,120 @@ LRESULT WindowImplBase::OnChar(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bH
 
 LRESULT WindowImplBase::OnSysCommand(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-	if (wParam == SC_CLOSE)
-	{
+	if (wParam == SC_CLOSE)	{
 		bHandled = TRUE;
 		SendMessage(WM_CLOSE);
 		return 0;
 	}
-#if defined(WIN32) && !defined(UNDER_CE)
-	BOOL bZoomed = ::IsZoomed(*this);
-	LRESULT lRes = CWindowWnd::HandleMessage(uMsg, wParam, lParam);
-	if( ::IsZoomed(*this) != bZoomed )
-	{
-        CControlUI* pbtnMax = static_cast<CControlUI*>(m_PaintManager.FindControl(_T("maxbtn")));         // max button
-        CControlUI* pbtnRestore = static_cast<CControlUI*>(m_PaintManager.FindControl(_T("restorebtn"))); // restore button
 
-        // toggle status of max and restore button
-        if (pbtnMax && pbtnRestore)
-        {
-            pbtnMax->SetVisible(TRUE == bZoomed);
-            pbtnRestore->SetVisible(FALSE == bZoomed);
-        }
+	BOOL bZoomed = ::IsZoomed(GetHWND());
+	LRESULT lRes = Window::HandleMessage(uMsg, wParam, lParam);
+	if( ::IsZoomed(GetHWND()) != bZoomed )
+	{
+
 	}
-#else
-	LRESULT lRes = CWindowWnd::HandleMessage(uMsg, wParam, lParam);
-#endif
+
 	return lRes;
 }
 
 LRESULT WindowImplBase::OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
-	LONG styleValue = ::GetWindowLong(*this, GWL_STYLE);
-	styleValue &= ~WS_CAPTION;
-	::SetWindowLong(*this, GWL_STYLE, styleValue | WS_CLIPSIBLINGS | WS_CLIPCHILDREN);
-	RECT rcClient;
-	::GetClientRect(*this, &rcClient);
-	::SetWindowPos(*this, NULL, rcClient.left, rcClient.top, rcClient.right - rcClient.left, \
-		rcClient.bottom - rcClient.top, SWP_FRAMECHANGED);
+	::SetWindowLong(this->GetHWND(), GWL_STYLE, GetStyle());
 
-	m_PaintManager.Init(m_hWnd);
-	m_PaintManager.AddPreMessageFilter(this);
+	Init(m_hWnd);
+	SetWindowResourcePath(GetSkinFolder());
 
-	CDialogBuilder builder;
-	CDuiString strResourcePath=m_PaintManager.GetResourcePath();
-	if (strResourcePath.IsEmpty())
-	{
-		strResourcePath=m_PaintManager.GetInstancePath();
-		strResourcePath+=GetSkinFolder().GetData();
+	WindowBuilder builder;
+	std::wstring strSkinFile = GetWindowResourcePath() + GetSkinFile();
+
+	auto callback = nbase::Bind(&WindowImplBase::CreateControl, this, std::placeholders::_1);
+	auto pRoot = (Box*)builder.Create(strSkinFile.c_str(), callback, this);
+
+	ASSERT(pRoot && L"Faield to load xml file.");
+	if (pRoot == NULL) {
+		TCHAR szErrMsg[MAX_PATH] = { 0 };
+		_stprintf_s(szErrMsg, L"Failed to load xml file %s", strSkinFile.c_str());
+		MessageBox(NULL, szErrMsg, _T("Duilib"), MB_OK | MB_ICONERROR);
+		return -1;
 	}
-	m_PaintManager.SetResourcePath(strResourcePath.GetData());
-
-	switch(GetResourceType())
-	{
-	case UILIB_ZIP:
-		m_PaintManager.SetResourceZip(GetZIPFileName().GetData(), true);
-		break;
-	case UILIB_ZIPRESOURCE:
-		{
-			HRSRC hResource = ::FindResource(m_PaintManager.GetResourceDll(), GetResourceID(), _T("ZIPRES"));
-			if( hResource == NULL )
-				return 0L;
-			DWORD dwSize = 0;
-			HGLOBAL hGlobal = ::LoadResource(m_PaintManager.GetResourceDll(), hResource);
-			if( hGlobal == NULL ) 
-			{
-#if defined(WIN32) && !defined(UNDER_CE)
-				::FreeResource(hResource);
-#endif
-				return 0L;
-			}
-			dwSize = ::SizeofResource(m_PaintManager.GetResourceDll(), hResource);
-			if( dwSize == 0 )
-				return 0L;
-			m_lpResourceZIPBuffer = new BYTE[ dwSize ];
-			if (m_lpResourceZIPBuffer != NULL)
-			{
-				::CopyMemory(m_lpResourceZIPBuffer, (LPBYTE)::LockResource(hGlobal), dwSize);
-			}
-#if defined(WIN32) && !defined(UNDER_CE)
-			::FreeResource(hResource);
-#endif
-			m_PaintManager.SetResourceZip(m_lpResourceZIPBuffer, dwSize);
-		}
-		break;
-	}
-
-	CControlUI* pRoot=NULL;
-	if (GetResourceType()==UILIB_RESOURCE)
-	{
-		STRINGorID xml(_ttoi(GetSkinFile().GetData()));
-		pRoot = builder.Create(xml, _T("xml"), this, &m_PaintManager);
-	}
-	else
-		pRoot = builder.Create(GetSkinFile().GetData(), (UINT)0, this, &m_PaintManager);
-	ASSERT(pRoot);
-	if (pRoot==NULL)
-	{
-		MessageBox(NULL,_T("加载资源文件失败"),_T("Duilib"),MB_OK|MB_ICONERROR);
-		ExitProcess(1);
-		return 0;
-	}
-	m_PaintManager.AttachDialog(pRoot);
-	m_PaintManager.AddNotifier(this);
-
+	
+	pRoot = m_shadow.AttachShadow(pRoot);
+	AttachDialog(pRoot);
 	InitWindow();
+
+	if (pRoot->GetFixedWidth() == DUI_LENGTH_AUTO || pRoot->GetFixedHeight() == DUI_LENGTH_AUTO) {
+		CSize maxSize(99999, 99999);
+		CSize needSize = pRoot->EstimateSize(maxSize);
+		if( needSize.cx < pRoot->GetMinWidth() ) needSize.cx = pRoot->GetMinWidth();
+		if( pRoot->GetMaxWidth() >= 0 && needSize.cx > pRoot->GetMaxWidth() ) needSize.cx = pRoot->GetMaxWidth();
+		if( needSize.cy < pRoot->GetMinHeight() ) needSize.cy = pRoot->GetMinHeight();
+		if( needSize.cy > pRoot->GetMaxHeight() ) needSize.cy = pRoot->GetMaxHeight();
+
+		::MoveWindow(m_hWnd, 0, 0, needSize.cx, needSize.cy, FALSE);
+	}
+
+	Control *pControl = (Control*)FindControl(L"closebtn");
+	if (pControl) {
+		Button *pCloseBtn = dynamic_cast<Button*>(pControl);
+		ASSERT(pCloseBtn);
+		pCloseBtn->AttachClick(nbase::Bind(&WindowImplBase::OnButtonClick, this, std::placeholders::_1));
+	}
+
+	pControl = (Control*)FindControl(L"minbtn");
+	if (pControl)	{
+		Button* pMinBtn = dynamic_cast<Button*>(pControl);
+		ASSERT(pMinBtn);
+		pMinBtn->AttachClick(nbase::Bind(&WindowImplBase::OnButtonClick, this, std::placeholders::_1));
+	}
+
+	pControl = (Control*)FindControl(L"maxbtn");
+	if (pControl)	{
+		Button* pMaxBtn = dynamic_cast<Button*>(pControl);
+		ASSERT(pMaxBtn);
+		pMaxBtn->AttachClick(nbase::Bind(&WindowImplBase::OnButtonClick, this, std::placeholders::_1));
+	}
+
+	pControl = (Control*)FindControl(L"restorebtn");
+	if (pControl)	{
+		Button* pRestoreBtn = dynamic_cast<Button*>(pControl);
+		ASSERT(pRestoreBtn);
+		pRestoreBtn->AttachClick(nbase::Bind(&WindowImplBase::OnButtonClick, this, std::placeholders::_1));
+	}
+
 	return 0;
 }
 
-LRESULT WindowImplBase::OnKeyDown(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnKeyDown(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnKillFocus(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnKillFocus(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnSetFocus(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnSetFocus(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnLButtonDown(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnLButtonDown(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnLButtonUp(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnLButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
 }
 
-LRESULT WindowImplBase::OnMouseMove(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& bHandled)
+LRESULT WindowImplBase::OnMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 {
 	bHandled = FALSE;
 	return 0;
@@ -385,16 +395,16 @@ LRESULT WindowImplBase::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:			lRes = OnCreate(uMsg, wParam, lParam, bHandled); break;
 	case WM_CLOSE:			lRes = OnClose(uMsg, wParam, lParam, bHandled); break;
 	case WM_DESTROY:		lRes = OnDestroy(uMsg, wParam, lParam, bHandled); break;
-#if defined(WIN32) && !defined(UNDER_CE)
 	case WM_NCACTIVATE:		lRes = OnNcActivate(uMsg, wParam, lParam, bHandled); break;
 	case WM_NCCALCSIZE:		lRes = OnNcCalcSize(uMsg, wParam, lParam, bHandled); break;
+	case WM_WINDOWPOSCHANGING: lRes = OnWindowPosChanging(uMsg, wParam, lParam, bHandled); break;
 	case WM_NCPAINT:		lRes = OnNcPaint(uMsg, wParam, lParam, bHandled); break;
+	case WM_NCLBUTTONDBLCLK:lRes = OnNcLButtonDbClick(uMsg, wParam, lParam, bHandled); break;
 	case WM_NCHITTEST:		lRes = OnNcHitTest(uMsg, wParam, lParam, bHandled); break;
 	case WM_GETMINMAXINFO:	lRes = OnGetMinMaxInfo(uMsg, wParam, lParam, bHandled); break;
 	case WM_MOUSEWHEEL:		lRes = OnMouseWheel(uMsg, wParam, lParam, bHandled); break;
-#endif
 	case WM_SIZE:			lRes = OnSize(uMsg, wParam, lParam, bHandled); break;
-	case WM_CHAR:		lRes = OnChar(uMsg, wParam, lParam, bHandled); break;
+	case WM_CHAR:			lRes = OnChar(uMsg, wParam, lParam, bHandled); break;
 	case WM_SYSCOMMAND:		lRes = OnSysCommand(uMsg, wParam, lParam, bHandled); break;
 	case WM_KEYDOWN:		lRes = OnKeyDown(uMsg, wParam, lParam, bHandled); break;
 	case WM_KILLFOCUS:		lRes = OnKillFocus(uMsg, wParam, lParam, bHandled); break;
@@ -402,62 +412,78 @@ LRESULT WindowImplBase::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 	case WM_LBUTTONUP:		lRes = OnLButtonUp(uMsg, wParam, lParam, bHandled); break;
 	case WM_LBUTTONDOWN:	lRes = OnLButtonDown(uMsg, wParam, lParam, bHandled); break;
 	case WM_MOUSEMOVE:		lRes = OnMouseMove(uMsg, wParam, lParam, bHandled); break;
-	case WM_MOUSEHOVER:	lRes = OnMouseHover(uMsg, wParam, lParam, bHandled); break;
+	case WM_MOUSEHOVER:		lRes = OnMouseHover(uMsg, wParam, lParam, bHandled); break;
+	case WM_DPICHANGED:		lRes = OnDpiChanged(uMsg, wParam, lParam, bHandled); break;
 	default:				bHandled = FALSE; break;
 	}
+
 	if (bHandled) return lRes;
 
-	lRes = HandleCustomMessage(uMsg, wParam, lParam, bHandled);
-	if (bHandled) return lRes;
-
-	if (m_PaintManager.MessageHandler(uMsg, wParam, lParam, lRes))
-		return lRes;
-	return CWindowWnd::HandleMessage(uMsg, wParam, lParam);
+	return Window::HandleMessage(uMsg, wParam, lParam);
 }
 
-LRESULT WindowImplBase::HandleCustomMessage(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+bool WindowImplBase::OnButtonClick(EventArgs* msg)
 {
-	bHandled = FALSE;
-	return 0;
-}
-
-LONG WindowImplBase::GetStyle()
-{
-	LONG styleValue = ::GetWindowLong(*this, GWL_STYLE);
-	styleValue &= ~WS_CAPTION;
-
-	return styleValue;
-}
-
-void WindowImplBase::OnClick(TNotifyUI& msg)
-{
-	CDuiString sCtrlName = msg.pSender->GetName();
-	if( sCtrlName == _T("closebtn") )
-	{
+	std::wstring sCtrlName = msg->pSender->GetName();
+	if( sCtrlName == _T("closebtn") ) {
 		Close();
-		return; 
 	}
-	else if( sCtrlName == _T("minbtn"))
-	{ 
+	else if( sCtrlName == _T("minbtn")) { 
 		SendMessage(WM_SYSCOMMAND, SC_MINIMIZE, 0); 
-		return; 
 	}
-	else if( sCtrlName == _T("maxbtn"))
-	{ 
-		SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0); 
-		return; 
+	else if( sCtrlName == _T("maxbtn"))	{
+		Control* pMaxButton = (Control*)FindControl(L"maxbtn");
+		Control* pRestoreButton = (Control*)FindControl(L"restorebtn");
+		if (pMaxButton && pRestoreButton) {
+			pMaxButton->SetVisible(false);
+			pRestoreButton->SetVisible(true);
+		}
+		SendMessage(WM_SYSCOMMAND, SC_MAXIMIZE, 0);
 	}
-	else if( sCtrlName == _T("restorebtn"))
-	{ 
+	else if( sCtrlName == _T("restorebtn"))	{
+		Control* pMaxButton = (Control*)FindControl(L"maxbtn");
+		Control* pRestoreButton = (Control*)FindControl(L"restorebtn");
+		if (pMaxButton && pRestoreButton) {
+			pMaxButton->SetVisible(true);
+			pRestoreButton->SetVisible(false);
+		}
 		SendMessage(WM_SYSCOMMAND, SC_RESTORE, 0); 
-		return; 
 	}
-	return;
+
+	return true;
 }
 
-void WindowImplBase::Notify(TNotifyUI& msg)
+
+void WindowImplBase::ActiveWindow()
 {
-	return CNotifyPump::NotifyPump(msg);
+	if (::IsWindow(m_hWnd))
+	{
+		if (::IsIconic(m_hWnd))
+		{
+			::ShowWindow(m_hWnd, SW_RESTORE);
+		}
+		else
+		{
+			if (!::IsWindowVisible(m_hWnd))
+				::ShowWindow(m_hWnd, SW_SHOW);
+			::SetForegroundWindow(m_hWnd);
+		}
+	}
 }
 
+void WindowImplBase::SetTaskbarTitle(const std::wstring &title)
+{
+	::SetWindowTextW(m_hWnd, title.c_str());
+}
+
+
+void WindowImplBase::ToTopMost(bool forever)
+{
+	ASSERT(::IsWindow(m_hWnd));
+	::SetWindowPos(m_hWnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	if (!forever)
+	{
+		::SetWindowPos(m_hWnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+	}
+}
 }

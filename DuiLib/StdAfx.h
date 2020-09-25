@@ -8,16 +8,6 @@
 
 #pragma once
 
-#ifdef __GNUC__
-// 怎么都没找到min，max的头文件-_-
-#ifndef min
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-#endif
-#ifndef max
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#endif
-#endif
-
 #ifndef __FILET__
 #define __DUILIB_STR2WSTR(str)	L##str
 #define _DUILIB_STR2WSTR(str)	__DUILIB_STR2WSTR(str)
@@ -49,17 +39,22 @@
 
 // Required for VS 2008 (fails on XP and Win2000 without this fix)
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0500
+#define _WIN32_WINNT _WIN32_WINNT_WINXP
 #endif
 
 #include "UIlib.h"
-
 #include <olectl.h>
 
 #define lengthof(x) (sizeof(x)/sizeof(*x))
 #define MAX max
 #define MIN min
 #define CLAMP(x,a,b) (MIN(b,MAX(a,x)))
+
+#ifdef GDIPVER
+#undef GDIPVER
+#endif
+#define GDIPVER 0x0110
+#include <GdiPlus.h>
 
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.

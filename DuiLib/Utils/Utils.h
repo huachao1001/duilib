@@ -1,285 +1,288 @@
-#ifndef __UTILS_H__
-#define __UTILS_H__
+#ifndef UI_UTILS_UTILS_H_
+#define UI_UTILS_UTILS_H_
 
 #pragma once
 
-namespace DuiLib
+#include <oaidl.h> // for VARIANT
+
+namespace ui
 {
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
 
-	class DUILIB_API STRINGorID
+/////////////////////////////////////////////////////////////////////////////////////
+//
+
+class STRINGorID
+{
+public:
+	STRINGorID(LPCTSTR lpString) : m_lpstr(lpString)
 	{
-	public:
-		STRINGorID(LPCTSTR lpString);
-		STRINGorID(unsigned int nID);
+	
+	}
 
-		LPCTSTR m_lpstr;
-	};
-
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-    class CDuiString;
-	class DUILIB_API CDuiPoint : public tagPOINT
+	STRINGorID(UINT nID) : m_lpstr(MAKEINTRESOURCE(nID))
 	{
-	public:
-		CDuiPoint();
-		CDuiPoint(const POINT& src);
-		CDuiPoint(long x, long y);
-		CDuiPoint(LPARAM lParam);
-        CDuiPoint(LPCTSTR pstrValue);
-        CDuiString ToString();
-	};
+	
+	}
 
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
+	LPCTSTR m_lpstr;
+};
 
-	class DUILIB_API CDuiSize : public tagSIZE
+/////////////////////////////////////////////////////////////////////////////////////
+//
+
+class UILIB_API CPoint : public tagPOINT
+{
+public:
+	CPoint()
 	{
-	public:
-		CDuiSize();
-		CDuiSize(const SIZE& src);
-		CDuiSize(const RECT rc);
-		CDuiSize(long cx, long cy);
-        CDuiSize(LPCTSTR pstrValue);
-        CDuiString ToString();
-	};
+		x = y = 0;
+	}
 
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-
-	class DUILIB_API CDuiRect : public tagRECT
+	CPoint(const POINT& src)
 	{
-	public:
-		CDuiRect();
-		CDuiRect(const RECT& src);
-		CDuiRect(long iLeft, long iTop, long iRight, long iBottom);
-        CDuiRect(LPCTSTR pstrValue);
-        CDuiString ToString();
+		x = src.x;
+		y = src.y;
+	}
 
-		int GetWidth() const;
-		int GetHeight() const;
-		void Empty();
-		bool IsNull() const;
-		void Join(const RECT& rc);
-		void ResetOffset();
-		void Normalize();
-		void Offset(int cx, int cy);
-		void Inflate(int cx, int cy);
-		void Deflate(int cx, int cy);
-		void Union(CDuiRect& rc);
-	};
-
-    /////////////////////////////////////////////////////////////////////////////////////
-    //
-
-    class DUILIB_API CDuiString
-    {
-    public:
-        enum { MAX_LOCAL_STRING_LEN = 63 };
-
-        CDuiString();
-        CDuiString(const TCHAR ch);
-        CDuiString(const CDuiString& src);
-        CDuiString(LPCTSTR lpsz, int nLen = -1);
-        ~CDuiString();
-        CDuiString ToString();
-
-        void Empty();
-        int GetLength() const;
-        bool IsEmpty() const;
-        TCHAR GetAt(int nIndex) const;
-        void Append(LPCTSTR pstr);
-        void Assign(LPCTSTR pstr, int nLength = -1);
-        LPCTSTR GetData() const;
-
-        void SetAt(int nIndex, TCHAR ch);
-        operator LPCTSTR() const;
-
-        TCHAR operator[] (int nIndex) const;
-        const CDuiString& operator=(const CDuiString& src);
-        const CDuiString& operator=(const TCHAR ch);
-        const CDuiString& operator=(LPCTSTR pstr);
-#ifdef _UNICODE
-        const CDuiString& operator=(LPCSTR lpStr);
-        const CDuiString& operator+=(LPCSTR lpStr);
-#else
-        const CDuiString& operator=(LPCWSTR lpwStr);
-        const CDuiString& operator+=(LPCWSTR lpwStr);
-#endif
-        CDuiString operator+(const CDuiString& src) const;
-        CDuiString operator+(LPCTSTR pstr) const;
-        const CDuiString& operator+=(const CDuiString& src);
-        const CDuiString& operator+=(LPCTSTR pstr);
-        const CDuiString& operator+=(const TCHAR ch);
-
-        bool operator == (LPCTSTR str) const;
-        bool operator != (LPCTSTR str) const;
-        bool operator <= (LPCTSTR str) const;
-        bool operator <  (LPCTSTR str) const;
-        bool operator >= (LPCTSTR str) const;
-        bool operator >  (LPCTSTR str) const;
-
-        int Compare(LPCTSTR pstr) const;
-        int CompareNoCase(LPCTSTR pstr) const;
-
-        void MakeUpper();
-        void MakeLower();
-
-        CDuiString Left(int nLength) const;
-        CDuiString Mid(int iPos, int nLength = -1) const;
-        CDuiString Right(int nLength) const;
-
-        int Find(TCHAR ch, int iPos = 0) const;
-        int Find(LPCTSTR pstr, int iPos = 0) const;
-        int ReverseFind(TCHAR ch) const;
-        int Replace(LPCTSTR pstrFrom, LPCTSTR pstrTo);
-
-        int __cdecl Format(LPCTSTR pstrFormat, ...);
-        int __cdecl SmallFormat(LPCTSTR pstrFormat, ...);
-
-    protected:
-        LPTSTR m_pstr;
-        TCHAR m_szBuffer[MAX_LOCAL_STRING_LEN + 1];
-    };
-
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-
-	class DUILIB_API CDuiPtrArray
+	CPoint(int _x, int _y)
 	{
-	public:
-		CDuiPtrArray(int iPreallocSize = 0);
-		CDuiPtrArray(const CDuiPtrArray& src);
-		~CDuiPtrArray();
+		x = _x;
+		y = _y;
+	}
 
-		void Empty();
-		void Resize(int iSize);
-		bool IsEmpty() const;
-		int Find(LPVOID iIndex) const;
-		bool Add(LPVOID pData);
-		bool SetAt(int iIndex, LPVOID pData);
-		bool InsertAt(int iIndex, LPVOID pData);
-		bool Remove(int iIndex, int iCount = 1);
-		int GetSize() const;
-		LPVOID* GetData();
-
-		LPVOID GetAt(int iIndex) const;
-		LPVOID operator[] (int nIndex) const;
-
-	protected:
-		LPVOID* m_ppVoid;
-		int m_nCount;
-		int m_nAllocated;
-	};
-
-
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-
-	class DUILIB_API CDuiValArray
+	CPoint(LPARAM lParam)
 	{
-	public:
-		CDuiValArray(int iElementSize, int iPreallocSize = 0);
-		~CDuiValArray();
+		x = GET_X_LPARAM(lParam);
+		y = GET_Y_LPARAM(lParam);
+	}
 
-		void Empty();
-		bool IsEmpty() const;
-		bool Add(LPCVOID pData);
-		bool Remove(int iIndex,  int iCount = 1);
-		int GetSize() const;
-		LPVOID GetData();
-
-		LPVOID GetAt(int iIndex) const;
-		LPVOID operator[] (int nIndex) const;
-
-	protected:
-		LPBYTE m_pVoid;
-		int m_iElementSize;
-		int m_nCount;
-		int m_nAllocated;
-	};
-
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-
-    struct TITEM;
-	class DUILIB_API CDuiStringPtrMap
+	void Offset(int offsetX, int offsetY)
 	{
-	public:
-		CDuiStringPtrMap(int nSize = 83);
-		~CDuiStringPtrMap();
+		x += offsetX;
+		y += offsetY;
+	}
 
-		void Resize(int nSize = 83);
-		LPVOID Find(LPCTSTR key, bool optimize = true) const;
-		bool Insert(LPCTSTR key, LPVOID pData);
-		LPVOID Set(LPCTSTR key, LPVOID pData);
-		bool Remove(LPCTSTR key);
-		void RemoveAll();
-		int GetSize() const;
-		LPCTSTR GetAt(int iIndex) const;
-		LPCTSTR operator[] (int nIndex) const;
-
-	protected:
-		TITEM** m_aT;
-		int m_nBuckets;
-		int m_nCount;
-	};
-
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-
-	class DUILIB_API CWaitCursor
+	void Offset(CPoint offsetPoint)
 	{
-	public:
-		CWaitCursor();
-		~CWaitCursor();
+		x += offsetPoint.x;
+		y += offsetPoint.y;
+	}
+};
 
-	protected:
-		HCURSOR m_hOrigCursor;
-	};
+/////////////////////////////////////////////////////////////////////////////////////
+//
 
-	/////////////////////////////////////////////////////////////////////////////////////
-	//
-
-	class CVariant : public VARIANT
+class UILIB_API CSize : public tagSIZE
+{
+public:
+	CSize()
 	{
-	public:
-		CVariant() 
-		{ 
-			VariantInit(this); 
-		}
-		CVariant(int i)
-		{
-			VariantInit(this);
-			this->vt = VT_I4;
-			this->intVal = i;
-		}
-		CVariant(float f)
-		{
-			VariantInit(this);
-			this->vt = VT_R4;
-			this->fltVal = f;
-		}
-		CVariant(LPOLESTR s)
-		{
-			VariantInit(this);
-			this->vt = VT_BSTR;
-			this->bstrVal = s;
-		}
-		CVariant(IDispatch *disp)
-		{
-			VariantInit(this);
-			this->vt = VT_DISPATCH;
-			this->pdispVal = disp;
-		}
+		cx = cy = 0;
+	}
 
-		~CVariant() 
-		{ 
-			VariantClear(this); 
-		}
-	};
+	CSize(const CSize& src)
+	{
+		cx = src.cx;
+		cy = src.cy;
+	}
 
-}// namespace DuiLib
+	CSize(int _cx, int _cy)
+	{
+		cx = _cx;
+		cy = _cy;
+	}
 
-#endif // __UTILS_H__
+	void Offset(int offsetCX, int offsetCY)
+	{
+		cx += offsetCX;
+		cy += offsetCY;
+	}
+
+	void Offset(CSize offsetPoint)
+	{
+		cx += offsetPoint.cx;
+		cy += offsetPoint.cy;
+	}
+};
+
+/////////////////////////////////////////////////////////////////////////////////////
+//
+
+class UILIB_API UiRect : public tagRECT
+{
+public:
+	UiRect()
+	{
+		left = top = right = bottom = 0;
+	}
+
+	UiRect(const RECT& src)
+	{
+		left = src.left;
+		top = src.top;
+		right = src.right;
+		bottom = src.bottom;
+	}
+
+	UiRect(int iLeft, int iTop, int iRight, int iBottom)
+	{
+		left = iLeft;
+		top = iTop;
+		right = iRight;
+		bottom = iBottom;
+	}
+
+	int GetWidth() const
+	{
+		return right - left;
+	}
+
+	int GetHeight() const
+	{
+		return bottom - top;
+	}
+
+	void Clear()
+	{
+		left = top = right = bottom = 0;
+	}
+
+	bool IsRectEmpty() const
+	{
+		return ::IsRectEmpty(this) == TRUE; 
+	}
+
+	void ResetOffset()
+	{
+		::OffsetRect(this, -left, -top);
+	}
+
+	void Normalize()
+	{
+		if( left > right ) { int iTemp = left; left = right; right = iTemp; }
+		if( top > bottom ) { int iTemp = top; top = bottom; bottom = iTemp; }
+	}
+
+	void Offset(int cx, int cy)
+	{
+		::OffsetRect(this, cx, cy);
+	}
+
+	void Offset(const CPoint& offset)
+	{
+		::OffsetRect(this, offset.x, offset.y);
+	}
+
+	void Inflate(int cx, int cy)
+	{
+		::InflateRect(this, cx, cy);
+	}
+
+	void Inflate(const UiRect& rect)
+	{
+		this->left -= rect.left;
+		this->top -= rect.top;
+		this->right += rect.right;
+		this->bottom += rect.bottom;
+	}
+
+	void Deflate(int cx, int cy)
+	{
+		::InflateRect(this, -cx, -cy);
+	}
+
+	void Deflate(const UiRect& rect)
+	{
+		this->left += rect.left;
+		this->top += rect.top;
+		this->right -= rect.right;
+		this->bottom -= rect.bottom;
+	}
+
+	void Union(const UiRect& rc)
+	{
+		::UnionRect(this, this, &rc);
+	}
+
+	void Intersect(const UiRect& rc)
+	{
+		::IntersectRect(this, this, &rc);
+	}
+
+	void Subtract(const UiRect& rc)
+	{
+		::SubtractRect(this, this, &rc);
+	}
+
+	bool IsPointIn(const CPoint& point) const
+	{
+		return ::PtInRect(this, point) == TRUE;
+	}
+
+	bool Equal(const UiRect& rect) const
+	{
+		return this->left == rect.left && this->top == rect.top 
+			&& this->right == rect.right && this->bottom == rect.bottom;
+	}
+};
+
+/////////////////////////////////////////////////////////////////////////////////////
+//
+
+class CVariant : public VARIANT
+{
+public:
+	CVariant() 
+	{ 
+		VariantInit(this); 
+	}
+
+	CVariant(int i)
+	{
+		VariantInit(this);
+		this->vt = VT_I4;
+		this->intVal = i;
+	}
+
+	CVariant(float f)
+	{
+		VariantInit(this);
+		this->vt = VT_R4;
+		this->fltVal = f;
+	}
+
+	CVariant(LPOLESTR s)
+	{
+		VariantInit(this);
+		this->vt = VT_BSTR;
+		this->bstrVal = s;
+	}
+
+	CVariant(IDispatch *disp)
+	{
+		VariantInit(this);
+		this->vt = VT_DISPATCH;
+		this->pdispVal = disp;
+	}
+
+	~CVariant() 
+	{ 
+		VariantClear(this); 
+	}
+};
+
+class PathUtil
+{
+public:
+	static std::wstring GetCurrentModuleDir()
+	{
+		std::wstring strModulePath;
+		strModulePath.resize(MAX_PATH);
+		::GetModuleFileNameW(::GetModuleHandle(NULL), &strModulePath[0], (DWORD)strModulePath.length());
+		return strModulePath.substr(0, strModulePath.find_last_of(L"\\") + 1);
+	}
+};
+
+}// namespace ui
+
+#endif // UI_UTILS_UTILS_H_
